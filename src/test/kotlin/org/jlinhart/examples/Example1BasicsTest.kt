@@ -1,4 +1,4 @@
-package org.jlinhart
+package org.jlinhart.examples
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest

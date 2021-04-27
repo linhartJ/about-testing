@@ -1,4 +1,4 @@
-package org.jlinhart
+package org.jlinhart.examples
 
 import com.nhaarman.mockitokotlin2.any
 import com.nhaarman.mockitokotlin2.atLeastOnce

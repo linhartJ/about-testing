@@ -1,4 +1,4 @@
-package org.jlinhart
+package org.jlinhart.examples
 
 class Example2Mocking(
     private val config: LettersConfig,

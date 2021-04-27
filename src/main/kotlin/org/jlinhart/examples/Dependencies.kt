@@ -1,4 +1,4 @@
-package org.jlinhart
+package org.jlinhart.examples
 
 data class Letter(
     val title: String,
