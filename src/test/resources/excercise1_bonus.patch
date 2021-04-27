@@ -1,0 +1,63 @@
+Index: src/main/kotlin/org/jlinhart/excercises/Excercise1_ScalingActionResolver.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/kotlin/org/jlinhart/excercises/Excercise1_ScalingActionResolver.kt b/src/main/kotlin/org/jlinhart/excercises/Excercise1_ScalingActionResolver.kt
+--- a/src/main/kotlin/org/jlinhart/excercises/Excercise1_ScalingActionResolver.kt	(revision f7d5529be0c58e686e9c6d08ba8781ddd66e0a5f)
++++ b/src/main/kotlin/org/jlinhart/excercises/Excercise1_ScalingActionResolver.kt	(date 1619532842489)
+@@ -6,10 +6,12 @@
+ /**
+  * This component is supposed to identify proper scaling action of "Worker" component based on given data.
+  * We attempt to have enough workers to satisfy all requests within 1 min.
++ * No workers can be added while dependencies are not available
+  *
+  * Input data include:
+  * 1) Workload - current amount of work to do
+  * 2) Workers - current state of running Workers
++ * 3) Dependencies - state of dependencies that are required to add more workers
+  */
+ class ScalingActionResolver {
+ 
+@@ -17,17 +19,25 @@
+         val targetDuration = Duration.ofMinutes(1)
+     }
+ 
+-    fun resolveAction(workload: Workload, workers: Workers): ScalingAction {
++    fun resolveAction(workload: Workload, workers: Workers, dependencies: DependenciesState): ScalingAction {
+         val requiredWorkersCount = calculateRequiredWorkersCount(workload)
+         val activeWorkers = countActiveWorkers(workers)
+         val diff = abs(requiredWorkersCount - activeWorkers)
+         return when {
+             requiredWorkersCount < activeWorkers -> resolveScaleDown(diff, workers)
+-            activeWorkers < requiredWorkersCount -> ScalingAction.ScaleUp(diff)
++            activeWorkers < requiredWorkersCount -> resolveScaleUp(diff, dependencies)
+             else -> ScalingAction.NoAction
+         }
+     }
+ 
++    private fun resolveScaleUp(maxStartupCount: Int, dependencies: DependenciesState): ScalingAction {
++        return when {
++            dependencies.db == ServiceState.NOT_AVAILABLE -> ScalingAction.NoAction
++            dependencies.queue == ServiceState.NOT_AVAILABLE -> ScalingAction.NoAction
++            else -> ScalingAction.ScaleUp(maxStartupCount)
++        }
++    }
++
+     private fun resolveScaleDown(maxShutdownCount: Int, workers: Workers): ScalingAction {
+         val toShutdown = workers.instances
+             .asSequence()
+@@ -66,6 +76,13 @@
+     val instances: Map<WorkerId, WorkerState>
+ )
+ 
++data class DependenciesState(
++    val db: ServiceState,
++    val queue: ServiceState
++)
++
++enum class ServiceState { NOT_AVAILABLE, AVAILABLE }
++
+ sealed class ScalingAction {
+     object NoAction : ScalingAction()
+     class ScaleUp(val workersToAdd: Int) : ScalingAction()
