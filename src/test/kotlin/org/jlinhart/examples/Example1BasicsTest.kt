@@ -147,4 +147,28 @@ internal class Example1BasicsTest {
     ): Person {
         return Person(name, surname, age)
     }
+
+    /**
+     * Builder classes protect our tests from changes in data classes. There is another technique that accomplishes
+     * similar thing and that is a wrapper function for tested method.
+     * Wrapper function looks seemingly same as tested method, so it may feel to you like redundant code or DRY violation.
+     *
+     * Wrapper function protects your tests from changes in tested method signature - like adding a parameter,
+     * because you can add newly added parameter to wrapper function with default value. It is VERY common,
+     * and generally worth the drawbacks in my opinion...
+     *
+     * Explore example below, then try to add mode to the method enum class Mode { STANDARD, DISCOUNT } as method param.
+     */
+    @Test
+    fun `decoupling test from implementation by wrapping tested method`() {
+        val youngPerson = aPerson(age = 15)
+
+        // when
+        val baleResult = calculateInsurance(youngPerson)
+
+        // then
+        assertEquals(100, baleResult)
+    }
+
+    private fun calculateInsurance(p: Person) = classUnderTest.calculateInsurance(p)
 }

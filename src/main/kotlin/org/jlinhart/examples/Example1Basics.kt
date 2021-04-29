@@ -17,6 +17,14 @@ class Example1Basics {
     fun calculateFullNameLength(p: Person): Int {
         return "${p.name} ${p.surname}".length
     }
+
+    fun calculateInsurance(p: Person): Int {
+        return when {
+            p.age < 20 -> 100
+            p.age < 50 -> 125
+            else -> 200
+        }
+    }
 }
 
 data class Person(
