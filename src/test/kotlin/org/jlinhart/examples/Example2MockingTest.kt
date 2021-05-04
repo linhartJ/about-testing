@@ -1,12 +1,14 @@
 package org.jlinhart.examples
 
 import com.nhaarman.mockitokotlin2.any
+import com.nhaarman.mockitokotlin2.argumentCaptor
 import com.nhaarman.mockitokotlin2.atLeastOnce
 import com.nhaarman.mockitokotlin2.doReturn
 import com.nhaarman.mockitokotlin2.eq
 import com.nhaarman.mockitokotlin2.given
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.never
+import com.nhaarman.mockitokotlin2.timeout
 import com.nhaarman.mockitokotlin2.times
 import com.nhaarman.mockitokotlin2.verify
 import org.junit.jupiter.api.Test
@@ -17,6 +19,8 @@ import org.mockito.Spy
 import org.mockito.junit.jupiter.MockitoExtension
 import org.mockito.verification.VerificationMode
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Mockito Extension allows mocks setup with annotations @Mock, @Spy, @Captor
@@ -33,7 +37,6 @@ internal class Example2MockingTest {
 
     /**
      * If you are not annotations fan, these are standard ways to create mocks programmatically
-     * These would not be picked up by
      */
 //    private val letterDaoAlt1 = Mockito.mock(LetterDao::class.java) // mockito core
 //    private val letterDaoAlt2 = mock<LetterDao>() // mockito-kotlin syntax
@@ -44,7 +47,7 @@ internal class Example2MockingTest {
      * @Spy - not really sure what its supposed to be for, but @InjectMocks can use this, I never used it for anything else (at least successfully)
      */
     @Spy
-    private val config = LettersConfig("smtp.quadient.test")
+    private val config = LettersConfig("smtp.quadient.test", 2000)
 
     /**
      * @InjectMocks will attempt class instantiation with available declared @Mock and @Spy classes
@@ -188,6 +191,57 @@ internal class Example2MockingTest {
 
     private fun archiveImportantLetter(letter: Letter) {
         classUnderTest.archiveImportantLetter(letter)
+    }
+
+    /**
+     * Argument captor is a matcher that enables us to check/retrieve data passed to mocks as arguments
+     * Useful especially when some mocked calls are invoked multiple times.
+     *
+     */
+    fun `how to use argument captor`() {
+        val captor = argumentCaptor<Letter>() // mockito-kotlin has a clean way to instantiate
+        verify(letterDao).save(captor.capture())
+        val savedLetter = captor.firstValue // allValues will get all
+        assertEquals(LetterType.OFFICIAL, savedLetter.type)
+
+        // argument captor can be useful when designing reusable assertion methods with readable api like:
+        val savedLetter2 = verifyLetterSaved()
+        assertEquals(LetterType.OFFICIAL, savedLetter2.type)
+        // or
+        verifyAllSavedLetters { savedLetters ->
+            val allSavedLettersOfficial = savedLetters.all { it.type == LetterType.OFFICIAL }
+            assertTrue(allSavedLettersOfficial, "Only official letters are supposed to be saved")
+        }
+    }
+
+    private fun verifyLetterSaved(): Letter {
+        val captor = argumentCaptor<Letter>() // mockito-kotlin has a clean way to instantiate
+        verify(letterDao).save(captor.capture())
+        return captor.firstValue // allValues will get all
+    }
+
+    private fun verifyAllSavedLetters(block: (List<Letter>) -> Unit) {
+        val captor = argumentCaptor<Letter>() // mockito-kotlin has a clean way to instantiate
+        verify(letterDao, atLeastOnce()).save(captor.capture())
+        block(captor.allValues)
+    }
+
+    /**
+     * Mockito has some build-in options for testing asynchronous logic.
+     * 'timeout' verification mode is fairly easy to understand and use.
+     */
+    @Test
+    fun `how to use timeout verification mode to test async logic`() {
+        // given
+        val letter = aLetter()
+
+        // when
+        classUnderTest.saveAsync(letter)
+
+        // then
+        verify(letterDao, timeout(5000)).save(letter)
+        // it is possible to combine timeout with other constraints like:
+        // verify(letterDao, timeout(1000).times(3)).save(any())
     }
 
     private val counter = AtomicInteger(0)

@@ -26,5 +26,6 @@ class LetterDao {
 }
 
 data class LettersConfig(
-    val smtpServer: String
+    val smtpServer: String,
+    val delay: Long
 )
