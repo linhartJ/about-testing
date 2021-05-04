@@ -1,0 +1,124 @@
+Index: src/main/kotlin/org/jlinhart/excercises/Exercise2_ScalingActionExecutor.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/kotlin/org/jlinhart/excercises/Exercise2_ScalingActionExecutor.kt b/src/main/kotlin/org/jlinhart/excercises/Exercise2_ScalingActionExecutor.kt
+--- a/src/main/kotlin/org/jlinhart/excercises/Exercise2_ScalingActionExecutor.kt	(revision afd1baa55e5b2fc2648f85bbc85019f53774fc4f)
++++ b/src/main/kotlin/org/jlinhart/excercises/Exercise2_ScalingActionExecutor.kt	(date 1620136357145)
+@@ -1,10 +1,12 @@
+ package org.jlinhart.excercises
+ 
+ import java.io.IOException
++import java.util.concurrent.CompletableFuture
++import java.util.concurrent.TimeUnit
+ 
+ /**
+  * This component performs desired ScalingAction by starting/stopping Workers.
+- * Every start/stop is synchronous and may fail - this component will not try again but returns information about
++ * Every start/stop is asynchronous and may fail - this component will not try again but returns future with information about
+  * actually completed operations.
+  * Start & Stop operations are delegated to WorkerOperator component
+  */
+@@ -12,45 +14,60 @@
+     private val workerOperator: WorkerOperator,
+     private val actionProvider: ActionProvider
+ ) {
++    private val stopTimeout = Timeout(5, TimeUnit.MINUTES)
+ 
+-    fun run(): ScalingActionResult {
+-        val scalingAction = actionProvider.get()
++    fun run(actionId: Long): CompletableFuture<ScalingActionResult> {
++        val scalingAction = actionProvider.get(actionId)
+         return when (scalingAction) {
+-            ScalingAction.NoAction -> ScalingActionResult(emptyList(), emptyList())
+-            is ScalingAction.ScaleUp -> ScalingActionResult(startWorkers(scalingAction.workersToAdd), emptyList())
+-            is ScalingAction.ScaleDown -> ScalingActionResult(emptyList(), stopWorkers(scalingAction.workersToStop))
++            ScalingAction.NoAction -> CompletableFuture.completedFuture(ScalingActionResult(emptyList(), emptyList()))
++            is ScalingAction.ScaleUp -> startWorkers(scalingAction.workersToAdd)
++                .thenApply { ScalingActionResult(it, emptyList()) }
++            is ScalingAction.ScaleDown -> stopWorkers(scalingAction.workersToStop)
++                .thenApply { ScalingActionResult(emptyList(), it) }
+         }
+     }
+ 
+-    private fun startWorkers(count: Int): List<WorkerId> {
+-        return (1..count).mapNotNull { startOrNull() }
++    private fun startWorkers(count: Int): CompletableFuture<List<WorkerId>> {
++        return CompletableFuture.supplyAsync {
++            (1..count)
++                .map { startOrNull() }
++                .mapNotNull { it.get() }
++        }
+     }
+ 
+-    private fun startOrNull(): WorkerId? {
+-        return try {
+-            println("Starting new worker")
+-            workerOperator.start()
+-        } catch (e: IOException) {
+-            println("Failed to start new worker")
+-            null
++    private fun startOrNull(): CompletableFuture<WorkerId?> {
++        return CompletableFuture.supplyAsync {
++            try {
++                println("Starting new worker")
++                workerOperator.start()
++            } catch (e: IOException) {
++                println("Failed to start new worker")
++                null
++            }
+         }
+     }
+ 
+-    private fun stopWorkers(workersToStop: List<WorkerId>): List<WorkerId> {
+-        return workersToStop.mapNotNull { stopOrNull(it) }
++    private fun stopWorkers(workersToStop: List<WorkerId>): CompletableFuture<List<WorkerId>> {
++        return CompletableFuture.supplyAsync {
++            workersToStop
++                .map { stopOrNull(it) }
++                .mapNotNull { it.get() }
++        }
+     }
+ 
+-    private fun stopOrNull(id: WorkerId): WorkerId? {
+-        return try {
+-            println("Stopping worker $id")
+-            workerOperator.stop(id)
+-            id
+-        } catch (e: NoSuchElementException) {
+-            println("Worker $id already does not exist. Stop considered successful.")
+-            id
+-        } catch (e: IOException) {
+-            println("Failed to stop worker $id")
+-            null
++    private fun stopOrNull(id: WorkerId): CompletableFuture<WorkerId?> {
++        return CompletableFuture.supplyAsync {
++            try {
++                println("Stopping worker $id")
++                workerOperator.stop(id, stopTimeout)
++                id
++            } catch (e: NoSuchElementException) {
++                println("Worker $id already does not exist. Stop considered successful.")
++                id
++            } catch (e: IOException) {
++                println("Failed to stop worker $id")
++                null
++            }
+         }
+     }
+ }
+@@ -65,9 +82,11 @@
+     fun start(): WorkerId
+ 
+     @Throws(NoSuchElementException::class, IOException::class)
+-    fun stop(id: WorkerId)
++    fun stop(id: WorkerId, timeout: Timeout)
+ }
+ 
+ interface ActionProvider {
+-    fun get(): ScalingAction
++    fun get(id: Long): ScalingAction
+ }
++
++data class Timeout(val length: Long, val units: TimeUnit)
